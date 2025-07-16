@@ -17,6 +17,9 @@ class Globals:
     cameraPosition = np.array([0, 0, -3.001])
     currentColor = None
     depthBuffer = None  # Will initialize later
+
+    # Store loaded points
+    point_cloud_data: list[Point3D] = []
     
     # Movement
     delta = 0.1  # movement speed modifier
@@ -146,6 +149,99 @@ def draw_polygon_edges(vertices: list[Pixel], surface: pygame.Surface, color: np
         j = (i + 1) % len(vertices)  # Next vertex with wrap-around
         draw_line(vertices[i], vertices[j], color, surface)
 
+
+# pointcloud specifics:
+
+
+def render_point_cloud(
+    points_3d: list[Point3D],
+    surface: pygame.Surface,
+    camera_position: np.ndarray,
+    rotation_matrix: np.ndarray,
+    focal_length: float,
+    screen_width: int,
+    screen_height: int,
+    depth_buffer: np.ndarray # We'll need to pass this for depth testing
+):
+    """
+    Renders a point cloud onto the Pygame surface with depth testing.
+
+    Args:
+        points_3d: A list of Point3D objects to render.
+        surface: The Pygame surface to draw on.
+        camera_position: The 3D position of the camera (e.g., Globals.cameraPosition).
+        rotation_matrix: The camera's rotation matrix (e.g., Globals.R).
+        focal_length: The camera's focal length (e.g., Globals.focalLength).
+        screen_width: Width of the screen.
+        screen_height: Height of the screen.
+        depth_buffer: A 2D NumPy array for depth testing (modified in-place).
+                      Should be initialized with float('inf') for all pixels.
+    """
+    # Reset depth buffer for this frame
+    depth_buffer.fill(float('inf'))
+
+    for point in points_3d:
+        # Create a temporary Pixel object to use the vertex_shader
+        p_screen = Pixel(0, 0, 0.0)
+        
+        # Convert Point3D's (x,y,z) to a NumPy array for the shader
+        v_3d = np.array([point.x, point.y, point.z])
+
+        # Apply the vertex shader to get screen coordinates and zinv
+        # We temporarily modify Globals to fit your vertex_shader's reliance on them
+        # A more robust solution would be to pass these as arguments to vertex_shader
+        original_cam_pos = Globals.cameraPosition
+        original_R = Globals.R
+        original_focal_length = Globals.focalLength
+        original_screen_width = Globals.SCREEN_WIDTH
+        original_screen_height = Globals.SCREEN_HEIGHT
+
+        Globals.cameraPosition = camera_position
+        Globals.R = rotation_matrix
+        Globals.focalLength = focal_length
+        Globals.SCREEN_WIDTH = screen_width
+        Globals.SCREEN_HEIGHT = screen_height
+
+        vertex_shader(v_3d, p_screen)
+
+        # Restore Globals (if vertex_shader modifies them, otherwise not strictly needed)
+        Globals.cameraPosition = original_cam_pos
+        Globals.R = original_R
+        Globals.focalLength = original_focal_length
+        Globals.SCREEN_WIDTH = original_screen_width
+        Globals.SCREEN_HEIGHT = original_screen_height
+
+
+        # Check if the point is in front of the camera and on screen
+        if p_screen.x != -1 and \
+           0 <= p_screen.x < screen_width and \
+           0 <= p_screen.y < screen_height:
+            
+            # Perform depth test
+            if p_screen.zinv > depth_buffer[p_screen.y, p_screen.x]:
+                # This point is behind something already drawn at this pixel, skip it
+                continue
+            
+            # If it's closer, update the depth buffer
+            depth_buffer[p_screen.y, p_screen.x] = p_screen.zinv
+            
+            # Convert color from 0-255 to Pygame format
+            point_color = (point.r, point.g, point.b)
+            
+            # Draw the point as a single pixel
+            # You could also draw a small circle for a "splat" effect, similar to the paper
+            # For a single pixel:
+            surface.set_at((p_screen.x, p_screen.y), point_color)
+            
+            # For a small splat (e.g., radius 1 for a 3x3 pixel area):
+            # pygame.draw.circle(surface, point_color, (p_screen.x, p_screen.y), 1)
+
+# get point cloud data
+
+point = load_points3D("south-building/sparse/points3D.txt")
+
+
+
 # 1. Initialize Pygame
 pygame.init()
 
@@ -169,10 +265,39 @@ while running:
         # If the user clicks the close button
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w: # Move forward
+                Globals.cameraPosition[2] += Globals.delta
+            if event.key == pygame.K_s: # Move backward
+                Globals.cameraPosition[2] -= Globals.delta
+            if event.key == pygame.K_a: # Move left
+                Globals.cameraPosition[0] -= Globals.delta
+            if event.key == pygame.K_d: # Move right
+                Globals.cameraPosition[0] += Globals.delta
+            if event.key == pygame.K_q: # Move up
+                Globals.cameraPosition[1] += Globals.delta
+            if event.key == pygame.K_e: # Move down
+                Globals.cameraPosition[1] -= Globals.delta
+            if event.key == pygame.K_LEFT: # Rotate left (yaw)
+                update_rotation(Globals.yaw)
+            if event.key == pygame.K_RIGHT: # Rotate right (yaw)
+                update_rotation(-Globals.yaw)
 
     # 4. Drawing operations
     # Fill the background with black (or any other color)
     screen.fill(BLACK)
+
+        # --- Render the point cloud ---
+    render_point_cloud(
+        Globals.point_cloud_data,
+        screen,
+        Globals.cameraPosition,
+        Globals.R,
+        Globals.focalLength,
+        Globals.SCREEN_WIDTH,
+        Globals.SCREEN_HEIGHT,
+        Globals.depthBuffer
+    )
 
     # Draw a single green pixel at coordinates (100, 150)
     # The draw.pixel() method expects the surface, color, and position
