@@ -8,8 +8,8 @@ class Globals:
     PI = 3.14159265358979323846
     epsilon = 0.000001
     
-    SCREEN_WIDTH = 1200
-    SCREEN_HEIGHT = 800
+    SCREEN_WIDTH = 500
+    SCREEN_HEIGHT = 500
     t = 0  # timer
     
     triangles = []
@@ -20,7 +20,7 @@ class Globals:
     pointSize = 2
 
     # Store loaded points
-    pointcloudData: list[Point3D] = []
+    point_cloud_data: list[Point3D] = []
     
     # Movement
     delta = 0.1  # movement speed modifier
@@ -181,7 +181,7 @@ def render_point_cloud(
     # Reset depth buffer for this frame
     Globals.depthBuffer.fill(float('inf'))
 
-    for point in Globals.pointcloudData:
+    for point in Globals.point_cloud_data:
         # Create a temporary Pixel object to use the vertex_shader
         p_screen = Pixel(0, 0, 0.0)
         
@@ -195,8 +195,8 @@ def render_point_cloud(
 
         # Check if the point is in front of the camera and on screen
         if p_screen.x != -1 and \
-           0 <= p_screen.x < Globals.SCREEN_WIDTH and \
-           0 <= p_screen.y < Globals.SCREEN_HEIGHT:
+           0 <= p_screen.x < Globals.screen_width and \
+           0 <= p_screen.y < Globals.screen_height:
             
             # Perform depth test
             if p_screen.zinv > Globals.depthBuffer[p_screen.y, p_screen.x]:
@@ -227,7 +227,7 @@ def draw_debug_info(surface: pygame.Surface):
     lines = [
         f"Camera Position: {Globals.cameraPosition}",
         f"Controls: WASD - Move, QE - Up/Down, Arrows - Rotate",
-        f"Points: {len(Globals.pointcloudData)}",
+        f"Points: {len(Globals.point_cloud_data)}",
         f"Scale: {Globals.scale_factor}",
         f"F1 - Toggle debug info"
     ]
@@ -238,13 +238,12 @@ def draw_debug_info(surface: pygame.Surface):
 
 # get point cloud data
 
-Globals.pointcloudData = load_points3D("south-building/sparse/points3D.txt")
+point = load_points3D("south-building/sparse/points3D.txt")
 
 
 
 # 1. Initialize Pygame
 pygame.init()
-clock = pygame.time.Clock()
 
 # 2. Set up the display window
 
@@ -262,54 +261,69 @@ running = True
 while running:
     # Event handling
     for event in pygame.event.get():
+        # If the user clicks the close button
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_F1:
-                Globals.show_debug = not Globals.show_debug
-        
-    # Handle continuous key presses
-    keys = pygame.key.get_pressed()
-    
-    # Movement
-    forward = Globals.R @ np.array([0, 0, 1])
-    right = Globals.R @ np.array([1, 0, 0])
-    up = np.array([0, 1, 0])
-    
-    if keys[pygame.K_w]: Globals.cameraPosition += forward * Globals.delta
-    if keys[pygame.K_s]: Globals.cameraPosition -= forward * Globals.delta
-    if keys[pygame.K_a]: Globals.cameraPosition -= right * Globals.delta
-    if keys[pygame.K_d]: Globals.cameraPosition += right * Globals.delta
-    if keys[pygame.K_LCTRL]: Globals.cameraPosition += up * Globals.delta
-    if keys[pygame.K_LSHIFT]: Globals.cameraPosition -= up * Globals.delta
-    
-    # Rotation
-    dyaw, dpitch = 0, 0
-    if keys[pygame.K_LEFT]: dyaw = Globals.yaw
-    if keys[pygame.K_RIGHT]: dyaw = -Globals.yaw
-    if keys[pygame.K_UP]: dpitch = Globals.pitch
-    if keys[pygame.K_DOWN]: dpitch = -Globals.pitch
-    update_rotation(dyaw, dpitch)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w: # Move forward
+                Globals.cameraPosition[2] += Globals.delta
+            if event.key == pygame.K_s: # Move backward
+                Globals.cameraPosition[2] -= Globals.delta
+            if event.key == pygame.K_a: # Move left
+                Globals.cameraPosition[0] -= Globals.delta
+            if event.key == pygame.K_d: # Move right
+                Globals.cameraPosition[0] += Globals.delta
+            if event.key == pygame.K_q: # Move up
+                Globals.cameraPosition[1] += Globals.delta
+            if event.key == pygame.K_e: # Move down
+                Globals.cameraPosition[1] -= Globals.delta
+            if event.key == pygame.K_LEFT: # Rotate left (yaw)
+                update_rotation(Globals.yaw)
+            if event.key == pygame.K_RIGHT: # Rotate right (yaw)
+                update_rotation(-Globals.yaw)
 
     # 4. Drawing operations
     # Fill the background with black (or any other color)
     screen.fill(BLACK)
 
         # --- Render the point cloud ---
-    render_point_cloud(screen)
-    draw_debug_info(screen)
+    render_point_cloud(
+        screen
+    )
 
-
+    # Draw a single green pixel at coordinates (100, 150)
+    # The draw.pixel() method expects the surface, color, and position
+    # The position is an (x, y) tuple, where (0,0) is the top-left corner.
+    pygame.draw.circle(screen, GREEN, (100, 150), 1) # A circle with radius 1 is a pixel
 
     # Alternative way to draw a pixel using set_at (less common for drawing directly, more for manipulating existing pixels)
     # screen.set_at((101, 150), GREEN)
 
+    # In your game loop:
+    a = Pixel(100, 100, 0)  # Example start pixel
+    b = Pixel(150, 120, 0)  # Example end pixel
+    color = np.array([1.0, 0.5, 0.2])  # Orange color (RGB 0-1)
+
+    draw_line(a, b, color, screen)
+
+        # Create some polygon vertices
+    polygon = [
+        Pixel(90, 140, 0),
+        Pixel(160, 140, 0),
+        Pixel(200, 120, 0),
+        Pixel(180, 160, 0)
+    ]
+
+    # Draw with default white color
+    draw_polygon_edges(polygon, screen)
+
+    # Or with custom color (red in this case)
+    draw_polygon_edges(polygon, screen, np.array([1.0, 0.0, 0.0]))
 
 
     # 5. Update the display
     # This makes everything you've drawn visible on the screen
     pygame.display.flip() # or pygame.display.update()
-    clock.tick(60)
 
 # 6. Quit Pygame
 pygame.quit()
