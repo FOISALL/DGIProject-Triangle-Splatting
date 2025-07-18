@@ -41,6 +41,19 @@ class Point3D:
     error: float
     # add TRACK[] later
 
+class Triangle:
+    # I wanted to use a regular class instead of data class since mutability might become a problem
+    # AI informed me that using this slots command would save memory 
+    # I have not used it before but upon reading on the internet it seems true
+    __slots__ = ['vertices', 'color', 'opacity', 'sigma'] 
+
+    def __init__(self, vertices, color, opacity = 0.8, sigma = 1.0):
+        self.vertices = np.array(vertices, dtype=np.float32)
+        self.color = np.array(color, dtype=np.uint8)
+        self.opacity = float(opacity)
+        self.sigma = float(sigma)
+
+
 def load_points3D(filepath: str) -> list[Point3D]:
     """
     Loads 3D points from a COLMAP points3D.txt file.
