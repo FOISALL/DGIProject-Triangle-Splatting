@@ -49,7 +49,7 @@ class Triangle:
 
     def __init__(self, vertices, color, opacity = 0.8, sigma = 1.0):
         self.vertices = np.array(vertices, dtype=np.float32)
-        self.color = np.array(color, dtype=np.uint8)
+        self.color = np.array([color[0]/255.0, color[1]/255.0, color[2]/255.0])
         self.opacity = float(opacity)
         self.sigma = float(sigma)
 

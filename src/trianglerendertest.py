@@ -15,7 +15,7 @@ class Globals:
     
     triangles = []
     focalLength = 500
-    cameraPosition = np.array([0, 0, -3.001])
+    cameraPosition = np.array([0, 0, -4.001])
     currentColor = None
     depthBuffer = None  # Will initialize later
     pointSize = 2
@@ -30,7 +30,7 @@ class Globals:
     R = np.eye(3)  # 3x3 identity matrix
 
     # Initialize depth buffer
-    depthBuffer = np.full((SCREEN_HEIGHT, SCREEN_WIDTH), float('inf'))
+    depthBuffer = np.full((SCREEN_HEIGHT, SCREEN_WIDTH), float(0))
 
     # Visualization controls
     scale_factor = 0.2  # Scale down large coordinates
@@ -257,7 +257,7 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel], surface: pygame.
             # Only draw if within screen bounds
             if (pixel.x >= 0 and pixel.x < Globals.SCREEN_WIDTH and 
                 pixel.y >= 0 and pixel.y < Globals.SCREEN_HEIGHT):
-                if pixel.zinv >= Globals.depthBuffer[pixel.y][pixel.x]:  # changing > to >= fixed the weird black lines
+                if pixel.zinv > Globals.depthBuffer[pixel.y][pixel.x]:  # changing > to >= fixed the weird black lines
                     surface.set_at((pixel.x, pixel.y), fillColor)
                     Globals.depthBuffer[pixel.y][pixel.x] = pixel.zinv
 
@@ -287,7 +287,7 @@ def render_point_cloud(
 
     """
     # Reset depth buffer for this frame
-    Globals.depthBuffer.fill(float('inf'))
+    Globals.depthBuffer.fill(float(0))
 
     for point in Globals.pointcloudData:
         # Create a temporary Pixel object to use the vertex_shader
@@ -347,31 +347,19 @@ def draw_debug_info(surface: pygame.Surface):
 # Triangle functions
 
 def initializeTriangle(point: Point3D, neighbours):
-    q = [point.x,point.y,point.z]
-    U = []
-    for i in range(0,3):
-        u = np.random.uniform(-1.0,1.0,3)
-        U.append(u/ np.linalg.norm(u))
-
-
-    # finally triangle is scaled according to surrounding point density d and k which is just some random value
+    q = np.array([point.x, point.y, point.z])
+    U = [np.random.uniform(-1.0, 1.0, 3) for _ in range(3)]
+    U = [u/np.linalg.norm(u) for u in U]  # Normalize
     
-    d = (neighbours[0][1] +neighbours[1][1] +neighbours[2][1])/3
-    k = 10 # same initialization as paper
-
-    V = []
-
-    # vi = q + k*d*ui
-    V = []
-    for u in U:
-        v = q + k * d * u  # Proper vector addition
-        V.append(v)
-
+    d = sum(dist for _, dist in neighbours[:3])/3
+    k = 2.2  # Reduced from 10 to make triangles smaller
+    
+    V = [q + k * d * u for u in U]
     return Triangle(
-    vertices=V,
-    color=np.array([point.r, point.g, point.b]),
-    opacity=0.28,
-    sigma=1.16
+        vertices=V,
+        color=np.array([point.r, point.g, point.b]),  # Will be converted to 0-1 in Triangle.__init__
+        opacity=0.28,
+        sigma=1.16
     )
 
 
@@ -466,37 +454,27 @@ while running:
 
     # 4. Drawing operations
     # Fill the background with black (or any other color)
+    # In your game loop, replace the triangle rendering section with:
+
+    # Clear buffers
     screen.fill(BLACK)
+    Globals.depthBuffer.fill(float(0))  # Critical fix!
 
-    Globals.depthBuffer.fill(float('inf'))  # Clear depth buffer
+    # Draw every 1000th triangle
+    for i, triangle in enumerate(Globals.triangles):
+        if i % 1 == 0:  # Fixed condition
+            # Convert color from 0-255 to 0-1 range
+            Globals.currentColor = triangle.color  # Already in 0-1 range
+            DrawPolygon(triangle.vertices, screen)
 
-        # --- Render the point cloud ---
-    # render_point_cloud(screen)
-
-    # Check first triangle's vertices
-    # if Globals.triangles:
-    #     print("First triangle vertices:")
-    #     for i, v in enumerate(Globals.triangles[0].vertices):
-    #         print(f"Vertex {i}: {v}, shape: {np.shape(v)}")
-
-
-    i = 0
-    for triangle in Globals.triangles:
-        i += 1
-        if i % 1000 == 0:
-            #print("good trinagle")
-            # DrawPolygon(triangle.vertices, screen)
             # Optional: Draw wireframe for debugging
-            vertices_pixels = []
-            for v in triangle.vertices:
-                p = Pixel(0, 0, 0)
-                vertex_shader(v, p)
-                vertices_pixels.append(p)
-            draw_polygon_edges(vertices_pixels, screen, np.array([1.0, 1.0, 1.0]))
+            # vertices_pixels = []
+            # for v in triangle.vertices:
+            #     p = Pixel(0, 0, 0)
+            #     vertex_shader(v, p)
+            #     vertices_pixels.append(p)
+            # draw_polygon_edges(vertices_pixels, screen, np.array([1.0, 1.0, 1.0]))
 
-        # --- Test triangle rendering ---
-    # Globals.depthBuffer.fill(float(0))  # Clear depth buffer
-    
     # Create a test triangle right in front of the camera
     # test_triangle = [
     #     np.array([-0.5, -0.5, 1.0]),  # Bottom left
@@ -509,21 +487,9 @@ while running:
     
     # # Draw just this one triangle
     # DrawPolygon(test_triangle, screen)
-    
-        
-    
+
     draw_debug_info(screen)
-
-
-
-    # Alternative way to draw a pixel using set_at (less common for drawing directly, more for manipulating existing pixels)
-    # screen.set_at((101, 150), GREEN)
-
-
-
-    # 5. Update the display
-    # This makes everything you've drawn visible on the screen
-    pygame.display.flip() # or pygame.display.update()
+    pygame.display.flip()
     clock.tick(60)
     #print(counter)
     counter += 1
