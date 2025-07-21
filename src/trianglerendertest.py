@@ -462,7 +462,7 @@ while running:
 
     # Draw every 1000th triangle
     for i, triangle in enumerate(Globals.triangles):
-        if i % 1 == 0:  # Fixed condition
+        if i % 1000 == 0:  # Fixed condition
             # Convert color from 0-255 to 0-1 range
             Globals.currentColor = triangle.color  # Already in 0-1 range
             DrawPolygon(triangle.vertices, screen)

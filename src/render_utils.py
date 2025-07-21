@@ -107,3 +107,41 @@ try:
 except Exception as e:
     print(f"Failed to load points: {e}")
 
+
+
+## ============== CODE GRAVEYARD =================
+
+
+# I never fully understood the problem with this version
+# def DrawPolygonoriginal(vertices: list[np.ndarray], surface: pygame.Surface):
+#     V = len(vertices)
+#     vertexPixels = []
+
+#     for i in range(V):
+#         projected = Pixel(0, 0, 0)
+#         vertex_shader(vertices[i], projected)  # Project into it
+#         if projected.x == -1 or \
+#             0 > projected.x >= Globals.SCREEN_WIDTH or\
+#             0 > projected.y >= Globals.SCREEN_HEIGHT:
+#             return
+#         vertexPixels.append(projected)  # Add to list
+    
+#     leftPixels, rightPixels = ComputePolygonRows(vertexPixels)
+#     DrawRows(leftPixels, rightPixels, surface)
+
+# def DrawPolygon(vertices: list[np.ndarray], surface: pygame.Surface):
+#     V = len(vertices)
+#     vertexPixels = []
+
+#     for i in range(V):
+#         projected = Pixel(0, 0, 0)
+#         vertex_shader(vertices[i], projected)  # Project into it
+#         if projected.x == -1 or \
+#            projected.x < 0 or projected.x >= Globals.SCREEN_WIDTH or \
+#            projected.y < 0 or projected.y >= Globals.SCREEN_HEIGHT:
+#             polygon_has_problematic_vertex = True
+#             return
+#         vertexPixels.append(projected)  # Add to list
+    
+#     leftPixels, rightPixels = ComputePolygonRows(vertexPixels)
+#     DrawRows(leftPixels, rightPixels, surface)

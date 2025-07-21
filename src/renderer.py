@@ -30,7 +30,7 @@ class Globals:
     R = np.eye(3)  # 3x3 identity matrix
 
     # Initialize depth buffer
-    depthBuffer = np.full((SCREEN_HEIGHT, SCREEN_WIDTH), float('inf'))
+    depthBuffer = np.full((SCREEN_HEIGHT, SCREEN_WIDTH), float(0))
 
     # Visualization controls
     scale_factor = 0.2  # Scale down large coordinates
@@ -49,9 +49,10 @@ def vertex_shader(v, p):
   
     
     # Perspective projection
-    p.zinv = 1.0 / z if z != 0 else float('inf')
+    p.zinv = 1.0 / z if z != 0 else float(0)
 
-    if z > 0:
+    epsilon = 1e-6
+    if z-epsilon > 0:
         # Perspective divide and viewport transform
         p.x = int(Globals.focalLength * x / z) + (Globals.SCREEN_WIDTH // 2)
         p.y = int(Globals.focalLength * y / z) + (Globals.SCREEN_HEIGHT // 2)
@@ -264,14 +265,29 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel], surface: pygame.
 def DrawPolygon(vertices: list[np.ndarray], surface: pygame.Surface):
     V = len(vertices)
     vertexPixels = []
-    
+    valid_vertices = len(vertices)
+
     for i in range(V):
         projected = Pixel(0, 0, 0)
         vertex_shader(vertices[i], projected)  # Project into it
+        if projected.x == -1 or \
+           projected.x < 0 or projected.x >= Globals.SCREEN_WIDTH or \
+           projected.y < 0 or projected.y >= Globals.SCREEN_HEIGHT:
+            valid_vertices -= 1
+            
+        
         vertexPixels.append(projected)  # Add to list
     
+    if valid_vertices == 0:
+        return
+    
+    for p in vertexPixels:
+        p.x = np.clip(p.x, 0, Globals.SCREEN_WIDTH-1)
+        p.y = np.clip(p.y, 0, Globals.SCREEN_HEIGHT-1)
     leftPixels, rightPixels = ComputePolygonRows(vertexPixels)
     DrawRows(leftPixels, rightPixels, surface)
+
+
 
 
 # pointcloud specifics:
@@ -287,7 +303,7 @@ def render_point_cloud(
 
     """
     # Reset depth buffer for this frame
-    Globals.depthBuffer.fill(float('inf'))
+    Globals.depthBuffer.fill(float(0))
 
     for point in Globals.pointcloudData:
         # Create a temporary Pixel object to use the vertex_shader
@@ -357,7 +373,7 @@ def initializeTriangle(point: Point3D, neighbours):
     # finally triangle is scaled according to surrounding point density d and k which is just some random value
     
     d = (neighbours[0][1] +neighbours[1][1] +neighbours[2][1])/3
-    k = 10 # same initialization as paper
+    k = 2.2 # same initialization as paper
 
     V = []
 
@@ -468,7 +484,7 @@ while running:
     # Fill the background with black (or any other color)
     screen.fill(BLACK)
 
-    Globals.depthBuffer.fill(float('inf'))  # Clear depth buffer
+    Globals.depthBuffer.fill(float(0))  # Clear depth buffer
 
         # --- Render the point cloud ---
     # render_point_cloud(screen)
@@ -483,16 +499,17 @@ while running:
     i = 0
     for triangle in Globals.triangles:
         i += 1
-        if i % 1000 == 0:
+        if i % 100 == 0:
             #print("good trinagle")
-            # DrawPolygon(triangle.vertices, screen)
+            Globals.currentColor = triangle.color  # Already in 0-1 range
+            DrawPolygon(triangle.vertices, screen)
             # Optional: Draw wireframe for debugging
-            vertices_pixels = []
-            for v in triangle.vertices:
-                p = Pixel(0, 0, 0)
-                vertex_shader(v, p)
-                vertices_pixels.append(p)
-            draw_polygon_edges(vertices_pixels, screen, np.array([1.0, 1.0, 1.0]))
+            # vertices_pixels = []
+            # for v in triangle.vertices:
+            #     p = Pixel(0, 0, 0)
+            #     vertex_shader(v, p)
+            #     vertices_pixels.append(p)
+            # draw_polygon_edges(vertices_pixels, screen, np.array([1.0, 1.0, 1.0]))
 
         # --- Test triangle rendering ---
     # Globals.depthBuffer.fill(float(0))  # Clear depth buffer
