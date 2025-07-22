@@ -14,6 +14,9 @@ class Pixel:
     def to_vector(self):
         return (self.x, self.y, self.zinv)
     
+    def to2dVector(self):
+        return (self.x, self.y)
+    
     # Alternatively, if you need numpy array specifically
     def toNumpy(self):
         
@@ -22,6 +25,7 @@ class Pixel:
     # For better string representation when printing
     def toStrong(self):
         return f"Pixel(x={self.x}, y={self.y}, zinv={self.zinv})"
+    
     
 class Intersection:
     def __init__(self):
@@ -106,6 +110,9 @@ try:
     print(f"Loaded {len(all_points_3d)} 3D points.")
 except Exception as e:
     print(f"Failed to load points: {e}")
+
+
+
 
 
 

@@ -233,15 +233,13 @@ def ComputePolygonRows(vertexPixels: list[Pixel]):
     return leftPixels, rightPixels
 
 
-def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangle, vertexPixels: list[Pixel], surface: pygame.Surface):
+def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel], surface: pygame.Surface):
     # Get the current drawing color (converted from 0-1 range to 0-255)
     if Globals.currentColor is None:
         return
     
     color_rgb = (Globals.currentColor * 255).astype(int)
     fillColor = (color_rgb[0], color_rgb[1], color_rgb[2])
-    Ls = SDF(triangle,vertexPixels)
-    s = s(vertexPixels)
     
     # Loop through each row (scanline)
     for row in range(len(leftPixels)):
@@ -255,8 +253,6 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangl
         # Interpolate between left and right boundaries
         rowPixels = interpolate_pixel(left, right, int(right.x - left.x) + 1)
 
-        
-
         # Draw each pixel in the row
         for pixel in rowPixels:
             # Only draw if within screen bounds
@@ -264,10 +260,6 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangl
                 pixel.y >= 0 and pixel.y < Globals.SCREEN_HEIGHT):
                 if pixel.zinv >= Globals.depthBuffer[pixel.y][pixel.x]:  # changing > to >= fixed the weird black lines
                     surface.set_at((pixel.x, pixel.y), fillColor)
-
-                    # starting window function, send in 2D coordinates aswell as orignal triangle
-                    
-                    I(Ls, pixel, s, triangle.sigma)
                     Globals.depthBuffer[pixel.y][pixel.x] = pixel.zinv
 
 def DrawPolygon(vertices: list[np.ndarray], surface: pygame.Surface):
@@ -292,11 +284,8 @@ def DrawPolygon(vertices: list[np.ndarray], surface: pygame.Surface):
     for p in vertexPixels:
         p.x = np.clip(p.x, 0, Globals.SCREEN_WIDTH-1)
         p.y = np.clip(p.y, 0, Globals.SCREEN_HEIGHT-1)
-    
-
-
     leftPixels, rightPixels = ComputePolygonRows(vertexPixels)
-    DrawRows(leftPixels, rightPixels,triangle,vertexPixels, surface)
+    DrawRows(leftPixels, rightPixels, surface)
 
 
 
@@ -426,51 +415,13 @@ def initialize_triangles(points: list[Point3D]) -> list[Triangle]:
     return triangles
 
 # Signed Distance Field
-def SDF(triangle: Triangle, vertexPixels: list[Pixel]):
-    vertices = []
-    for i in range(len(vertexPixels)):
-        vertices.append(vertexPixels[i].to2dVector())
-    Ls = []
-
+def SDF(triangle: Triangle):
+    vertices = triangle.vertices
+    edges = []
     for i in range(len(vertices)):
         # first we define all the edges of the triangle
-        
-        edge =  vertices[i-1] - vertices[i]
-        normal = [-edge[1],edge[0]]
-        # ensure normal is pointed in correct direction by comparing to opposing vertex, it should point in the opposite direction, outward
-        if normal @ (vertices[i-2] - vertices[i]):
-            normal = -normal
-
-        # normalize the normal
-        ni = normal / np.linalg.norm(normal)
-
-        # the formula we aim for here is L(i) = ni*p + di
-        # now we ensure a di value that sets function value to 0 on the edge
-        di = -(ni)@vertices[i-1]
-        Ls.append((ni,di))
-    return Ls
-
-def Phi(Ls, p:Pixel):
-    return np.max([nidi[0]@[p.x,p.y] + nidi[1] for nidi in Ls])
-
-def s(vertexPixels: list[Pixel]):
-    v = []
-    for i in range(len(vertexPixels)): # this loop might be skipable if we just create the 2d object outside once
-        v.append(vertexPixels[i].to2dVector())
-    a = np.linalg.norm(v[0] - v[1])
-    b = np.linalg.norm(v[0] - v[2])
-    c = np.linalg.norm(v[2] - v[1])
-    s = (a*v[2] + b*v[1] + c*v[0])/(a + b + c)
-    return s
-def I(Ls, p, s, sigma):
-    phiP = Phi(Ls,p)
-    phiS = Phi(Ls,s)
-    val = phiP/phiS
-    val = max(0,val)
-    return np.power(val, sigma)
-
-
-        
+        edge = vertices[i] - vertices[i-1]
+        pass
     
 
 
