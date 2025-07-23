@@ -15,7 +15,7 @@ class Pixel:
         return (self.x, self.y, self.zinv)
     
     def to2dVector(self):
-        return (self.x, self.y)
+        return np.array([self.x, self.y])
     
     # Alternatively, if you need numpy array specifically
     def toNumpy(self):

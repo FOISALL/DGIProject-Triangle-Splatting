@@ -241,7 +241,15 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangl
     color_rgb = (Globals.currentColor * 255).astype(int)
     fillColor = (color_rgb[0], color_rgb[1], color_rgb[2])
     Ls = SDF(triangle,vertexPixels)
-    s = s(vertexPixels)
+
+    if not Ls: # if bad triangle, we skip it, the papers handles these cases seperately but this safeguard doesnt hurt
+        return
+    
+    s = incenter(vertexPixels)
+    sPixel = Pixel(s[0],s[1],0) # z-value is irrelevant here
+
+    if s is None:
+        return
     
     # Loop through each row (scanline)
     for row in range(len(leftPixels)):
@@ -262,13 +270,23 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangl
             # Only draw if within screen bounds
             if (pixel.x >= 0 and pixel.x < Globals.SCREEN_WIDTH and 
                 pixel.y >= 0 and pixel.y < Globals.SCREEN_HEIGHT):
-                if pixel.zinv >= Globals.depthBuffer[pixel.y][pixel.x]:  # changing > to >= fixed the weird black lines
-                    surface.set_at((pixel.x, pixel.y), fillColor)
+
 
                     # starting window function, send in 2D coordinates aswell as orignal triangle
                     
-                    I(Ls, pixel, s, triangle.sigma)
-                    Globals.depthBuffer[pixel.y][pixel.x] = pixel.zinv
+                    influence = I(Ls, pixel, sPixel, triangle.sigma)
+                    if influence > 0:
+                        # Blend color with influence
+                        blended_color = (
+                            int(color_rgb[0] * influence),
+                            int(color_rgb[1] * influence),
+                            int(color_rgb[2] * influence)
+                        )
+                        if pixel.zinv >= Globals.depthBuffer[pixel.y][pixel.x]:  # changing > to >= fixed the weird black lines
+                            surface.set_at((pixel.x, pixel.y), blended_color)
+                            Globals.depthBuffer[pixel.y][pixel.x] = pixel.zinv
+
+                    
 
 def DrawPolygon(vertices: list[np.ndarray], surface: pygame.Surface):
     V = len(vertices)
@@ -436,13 +454,19 @@ def SDF(triangle: Triangle, vertexPixels: list[Pixel]):
         # first we define all the edges of the triangle
         
         edge =  vertices[i-1] - vertices[i]
-        normal = [-edge[1],edge[0]]
+        normal = np.array([-edge[1],edge[0]])
         # ensure normal is pointed in correct direction by comparing to opposing vertex, it should point in the opposite direction, outward
         if normal @ (vertices[i-2] - vertices[i]):
             normal = -normal
 
         # normalize the normal
-        ni = normal / np.linalg.norm(normal)
+        norm = np.linalg.norm(normal)
+        if norm > 1e-7:
+
+            ni = normal / np.linalg.norm(normal)
+        else:
+            # bad triangle, return nothing
+            return []
 
         # the formula we aim for here is L(i) = ni*p + di
         # now we ensure a di value that sets function value to 0 on the edge
@@ -450,23 +474,30 @@ def SDF(triangle: Triangle, vertexPixels: list[Pixel]):
         Ls.append((ni,di))
     return Ls
 
-def Phi(Ls, p:Pixel):
+def Phi(Ls, p: Pixel):
     return np.max([nidi[0]@[p.x,p.y] + nidi[1] for nidi in Ls])
 
-def s(vertexPixels: list[Pixel]):
+def incenter(vertexPixels: list[Pixel]):
     v = []
     for i in range(len(vertexPixels)): # this loop might be skipable if we just create the 2d object outside once
         v.append(vertexPixels[i].to2dVector())
     a = np.linalg.norm(v[0] - v[1])
     b = np.linalg.norm(v[0] - v[2])
     c = np.linalg.norm(v[2] - v[1])
+    perimeter = a + b + c
+    if perimeter < 1e-7:  # Degenerate triangle (zero-area) (loser)
+        return None
     s = (a*v[2] + b*v[1] + c*v[0])/(a + b + c)
     return s
-def I(Ls, p, s, sigma):
+def I(Ls, p: Pixel, s: Pixel, sigma):
     phiP = Phi(Ls,p)
     phiS = Phi(Ls,s)
+
+    if phiS >= 0:
+        return 0
+    
     val = phiP/phiS
-    val = max(0,val)
+    val =  np.clip(val, 0.0, 1.0)
     return np.power(val, sigma)
 
 
