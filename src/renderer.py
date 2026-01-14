@@ -232,8 +232,87 @@ def ComputePolygonRows(vertexPixels: list[Pixel]):
                     rightPixels[row].zinv = p.zinv
     return leftPixels, rightPixels
 
-
 def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangle, vertexPixels: list[Pixel], surface: pygame.Surface):
+    if Globals.currentColor is None:
+        return
+    
+    # Pre-calculate constants once per triangle
+    color_rgb = (Globals.currentColor * 255).astype(int)
+    Ls = SDF(triangle, vertexPixels)
+    if not Ls: 
+        return  # if bad triangle, we skip it, the papers handles these cases seperately but this safeguard doesnt hurt
+    
+    s = incenter(vertexPixels)
+    if s is None:
+        return
+    
+    # Ls is a list of (ni, di). group them for NumPy
+    # normal vectors and offests
+    ns = np.array([ls[0] for ls in Ls]) # Shape (3, 2)
+    ds = np.array([ls[1] for ls in Ls]) # Shape (3,)
+
+    # Pre-calculate phiS (the SDF value at the incenter)
+    # This replaces calling Phi(Ls, sPixel) inside the pixel loop
+    phiS = np.max(s @ ns.T + ds)
+    if phiS >= 0: # Avoid division by zero or invalid influence
+        return
+    
+    # Loop through each row (scanline)
+    for row in range(len(leftPixels)):
+        left = leftPixels[row]
+        right = rightPixels[row]
+
+         # Skip if left boundary is right of right boundary (invalid row)
+        if left.x > right.x: 
+            continue
+
+        # Determine valid horizontal range (row clipping)
+        x_start = max(0, int(round(left.x)))
+        x_end = min(Globals.SCREEN_WIDTH - 1, int(round(right.x)))
+        
+        if x_start > x_end:
+            continue
+
+        # --- VECTORIZED SECTION ---
+        # 1. Create all X coordinates for this row
+        xs = np.arange(x_start, x_end + 1)
+        y = left.y  # Constant for this row
+
+        # 2. Vectorized Z-inverse interpolation (linear)
+        width = right.x - left.x
+        if width > 0:
+            t = (xs - left.x) / width
+            zinvs = left.zinv + t * (right.zinv - left.zinv)
+        else:
+            zinvs = np.full_like(xs, left.zinv, dtype=float)
+
+        # 3. Vectorized influence calculation (the "Window Function")
+        # Instead of calling Phi() and I() per pixel, we do it for the row
+        points = np.stack([xs, np.full_like(xs, y)], axis=1) # Shape (N, 2)
+        phiP_all = np.max(points @ ns.T + ds, axis=1)        # Shape (N,)
+        
+        influence = np.power(np.clip(phiP_all / phiS, 0.0, 1.0), triangle.sigma)
+
+        # 4. Final Depth Test and Drawing
+        for i, x in enumerate(xs):
+            # Checking screen bounds for Y (X already checked via x_start/x_end)
+            if 0 <= y < Globals.SCREEN_HEIGHT:
+                zinv = zinvs[i]
+                if zinv >= Globals.depthBuffer[y, x]:
+                    inf = influence[i]
+                    if inf > 0:
+                        # Blend color
+                        blended_color = (
+                            int(color_rgb[0] * inf),
+                            int(color_rgb[1] * inf),
+                            int(color_rgb[2] * inf)
+                        )
+                        surface.set_at((x, y), blended_color)
+                        Globals.depthBuffer[y, x] = zinv
+    
+    return
+
+def DrawRowsnotvec(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangle, vertexPixels: list[Pixel], surface: pygame.Surface):
     # Get the current drawing color (converted from 0-1 range to 0-255)
     if Globals.currentColor is None:
         return
@@ -535,6 +614,17 @@ pygame.display.set_caption("Green Pixel Example")
 GREEN = (0, 255, 0)
 BLACK = (0, 0, 0)
 
+# render a cloud of triangles in a certian space-----
+# To get 100 cohesive triangles near the first point:
+coords = np.array([[p.x, p.y, p.z] for p in Globals.pointcloudData])
+tree = KDTree(coords)
+dist, indices = tree.query(coords[0], k=100) # Find 100 closest to the first point
+# Then in your loop:
+
+
+
+# -------
+
 # 3. Game loop
 running = True
 while running:
@@ -585,14 +675,21 @@ while running:
     #     for i, v in enumerate(Globals.triangles[0].vertices):
     #         print(f"Vertex {i}: {v}, shape: {np.shape(v)}")
 
+    for idx in indices:
+        triangle = Globals.triangles[idx]
+        Globals.currentColor = triangle.color
+        DrawPolygon(triangle.vertices, screen)
 
-    i = 0
-    for triangle in Globals.triangles:
-        i += 1
-        if i % 100 == 0:
-            #print("good trinagle")
-            Globals.currentColor = triangle.color  # Already in 0-1 range
-            DrawPolygon(triangle.vertices, screen)
+    # draw evey 100th triangle for testing    
+    # i = 0
+    # for triangle in Globals.triangles:
+    #     i += 1
+    #     if i % 100 == 0:
+    #         #print("good trinagle")
+    #         Globals.currentColor = triangle.color  # Already in 0-1 range
+    #         DrawPolygon(triangle.vertices, screen)
+
+
             # Optional: Draw wireframe for debugging
             # vertices_pixels = []
             # for v in triangle.vertices:
