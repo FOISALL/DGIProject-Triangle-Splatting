@@ -2,7 +2,7 @@ import pygame
 import numpy as np
 import math
 import os
-import sys
+import sysvenv
 from dataclasses import dataclass
 
 # --- Constants and Data Structures ---

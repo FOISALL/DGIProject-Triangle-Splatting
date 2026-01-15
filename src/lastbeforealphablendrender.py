@@ -29,14 +29,8 @@ class Globals:
     pitch = 0.05
     R = np.eye(3)  # 3x3 identity matrix
 
-    # Initialize depth buffer (not needed anymore)
-    # depthBuffer = np.full((SCREEN_HEIGHT, SCREEN_WIDTH), float(0))
-
-    # NEW BUFFERS FOR ALPHA BLENDING
-    # Stores the accumulated RGB values
-    colorAccumulator = np.zeros((SCREEN_HEIGHT, SCREEN_WIDTH, 3))
-    # Stores T (transmittance), initialized to 1.0 (fully transparent/clear)
-    transmittanceBuffer = np.ones((SCREEN_HEIGHT, SCREEN_WIDTH))
+    # Initialize depth buffer
+    depthBuffer = np.full((SCREEN_HEIGHT, SCREEN_WIDTH), float(0))
 
     # Visualization controls
     scale_factor = 0.2  # Scale down large coordinates
@@ -238,12 +232,12 @@ def ComputePolygonRows(vertexPixels: list[Pixel]):
                     rightPixels[row].zinv = p.zinv
     return leftPixels, rightPixels
 
-def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel], triangle: Triangle, vertexPixels: list[Pixel], surface: pygame.Surface):
-    if triangle.color is None:
+def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangle, vertexPixels: list[Pixel], surface: pygame.Surface):
+    if Globals.currentColor is None:
         return
     
     # Pre-calculate constants once per triangle
-    color_rgb = (triangle.color * 255).astype(int)
+    color_rgb = (Globals.currentColor * 255).astype(int)
     Ls = SDF(triangle, vertexPixels)
     if not Ls: 
         return  # if bad triangle, we skip it, the papers handles these cases seperately but this safeguard doesnt hurt
@@ -302,36 +296,78 @@ def DrawRows(leftPixels: list[Pixel], rightPixels: list[Pixel], triangle: Triang
         # 4. Final Depth Test and Drawing
         for i, x in enumerate(xs):
             # Checking screen bounds for Y (X already checked via x_start/x_end)
-
-            # 1. Calculate local alpha for this pixel
-            # alpha_i = opacity * window_function
-            alpha = triangle.opacity * influence[i]
-            if alpha < 0.001: continue
-
-            # 2. Get current Transmittance (how much light gets through to here)
-            T = Globals.transmittanceBuffer[y, x]
-
-            # If the pixel is already fully opaque from triangles in front, skip math
-            if T < 0.01: 
-                continue
-
-            # 3. Alpha Blending Equation (Front-to-Back)
-            # C = C + color * alpha * T
-            color_contribution = color_rgb * alpha * T
-            Globals.colorAccumulator[y, x] += color_contribution
-
-            # 4. Update Transmittance for primitives behind this one
-            # T = T * (1 - alpha)
-            Globals.transmittanceBuffer[y, x] *= (1.0 - alpha)
-
-            # 5. Write to screen (clipping to 255)
-            final_c = np.clip(Globals.colorAccumulator[y, x], 0, 255).astype(np.uint8)
-            surface.set_at((x, y), tuple(final_c))
+            if 0 <= y < Globals.SCREEN_HEIGHT:
+                zinv = zinvs[i]
+                if zinv >= Globals.depthBuffer[y, x]:
+                    inf = influence[i]
+                    if inf > 0:
+                        # Blend color
+                        blended_color = (
+                            int(color_rgb[0] * inf),
+                            int(color_rgb[1] * inf),
+                            int(color_rgb[2] * inf)
+                        )
+                        surface.set_at((x, y), blended_color)
+                        Globals.depthBuffer[y, x] = zinv
+    
     return
 
+def DrawRowsnotvec(leftPixels: list[Pixel], rightPixels: list[Pixel],triangle: Triangle, vertexPixels: list[Pixel], surface: pygame.Surface):
+    # Get the current drawing color (converted from 0-1 range to 0-255)
+    if Globals.currentColor is None:
+        return
+    
+    color_rgb = (Globals.currentColor * 255).astype(int)
+    fillColor = (color_rgb[0], color_rgb[1], color_rgb[2])
+    Ls = SDF(triangle,vertexPixels)
 
-def DrawPolygon(triangle: Triangle, surface: pygame.Surface):
-    vertices = triangle.vertices
+    if not Ls: # if bad triangle, we skip it, the papers handles these cases seperately but this safeguard doesnt hurt
+        return
+    
+    s = incenter(vertexPixels)
+    sPixel = Pixel(s[0],s[1],0) # z-value is irrelevant here
+
+    if s is None:
+        return
+    
+    # Loop through each row (scanline)
+    for row in range(len(leftPixels)):
+        left = leftPixels[row]
+        right = rightPixels[row]
+        
+        # Skip if left boundary is right of right boundary (invalid row)
+        if left.x > right.x: 
+            continue
+        
+        # Interpolate between left and right boundaries
+        rowPixels = interpolate_pixel(left, right, int(right.x - left.x) + 1)
+
+        
+
+        # Draw each pixel in the row
+        for pixel in rowPixels:
+            # Only draw if within screen bounds
+            if (pixel.x >= 0 and pixel.x < Globals.SCREEN_WIDTH and 
+                pixel.y >= 0 and pixel.y < Globals.SCREEN_HEIGHT):
+
+
+                    # starting window function, send in 2D coordinates aswell as orignal triangle
+                    
+                    influence = I(Ls, pixel, sPixel, triangle.sigma)
+                    if influence > 0:
+                        # Blend color with influence
+                        blended_color = (
+                            int(color_rgb[0] * influence),
+                            int(color_rgb[1] * influence),
+                            int(color_rgb[2] * influence)
+                        )
+                        if pixel.zinv >= Globals.depthBuffer[pixel.y][pixel.x]:  # changing > to >= fixed the weird black lines
+                            surface.set_at((pixel.x, pixel.y), blended_color)
+                            Globals.depthBuffer[pixel.y][pixel.x] = pixel.zinv
+
+                    
+
+def DrawPolygon(vertices: list[np.ndarray], surface: pygame.Surface):
     V = len(vertices)
     vertexPixels = []
     valid_vertices = len(vertices)
@@ -458,7 +494,7 @@ def initializeTriangle(point: Point3D, neighbours):
     return Triangle(
     vertices=V,
     color=np.array([point.r, point.g, point.b]),
-    opacity=0.9,
+    opacity=0.28,
     sigma=1.16
     )
 
@@ -564,6 +600,7 @@ counter = 0
 pygame.init()
 pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLEBUFFERS, 1)
 pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLESAMPLES, 4)
+screen = pygame.display.set_mode((Globals.SCREEN_WIDTH, Globals.SCREEN_HEIGHT), pygame.OPENGL | pygame.DOUBLEBUF)
 clock = pygame.time.Clock()
 
 # 2. Set up the display window
@@ -627,28 +664,7 @@ while running:
     # Fill the background with black (or any other color)
     screen.fill(BLACK)
 
-    # new alpha blending stuff 
-    Globals.colorAccumulator.fill(0)
-    Globals.transmittanceBuffer.fill(1.0)
-
-    # 2. Depth Sorting (CRITICAL FOR BLENDING)
-    # We sort triangles Front-to-Back based on the Z-depth in camera space
-    def get_depth(tri):
-        v_cam = (tri.vertices[0] - Globals.cameraPosition) @ Globals.R
-        return v_cam[2]
-    
-    # Filter out triangles behind the camera first (Z <= 0)
-    visible_indices = [idx for idx in indices if get_depth(Globals.triangles[idx]) > 0.1]
-    # Sort indices by depth
-    # Only rendering the 'indices' subset you defined earlier
-    sorted_indices = sorted(indices, key=lambda idx: get_depth(Globals.triangles[idx]))
-
-    # 3. Render
-    for idx in sorted_indices:
-        DrawPolygon(Globals.triangles[idx], screen)
-
-
-    # Globals.depthBuffer.fill(float(0))  # Clear depth buffer
+    Globals.depthBuffer.fill(float(0))  # Clear depth buffer
 
         # --- Render the point cloud ---
     # render_point_cloud(screen)
@@ -659,10 +675,10 @@ while running:
     #     for i, v in enumerate(Globals.triangles[0].vertices):
     #         print(f"Vertex {i}: {v}, shape: {np.shape(v)}")
 
-    # for idx in indices:
-    #     triangle = Globals.triangles[idx]
-    #     Globals.currentColor = triangle.color
-    #     DrawPolygon(triangle.vertices, screen)
+    for idx in indices:
+        triangle = Globals.triangles[idx]
+        Globals.currentColor = triangle.color
+        DrawPolygon(triangle.vertices, screen)
 
     # draw evey 100th triangle for testing    
     # i = 0
