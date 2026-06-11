@@ -1,0 +1,18 @@
+2D triangle renderer training log
+================================
+[     0.01s |    0.00m] Saved arguments to Testrun1\training_args.txt
+[     5.67s |    0.09m] Loaded target: triangleimage_flowers.png
+[     5.68s |    0.09m] Image: 512x300 | triangles: 608 | device: cuda
+[     5.68s |    0.09m] Output folder: Testrun1
+[     5.68s |    0.09m] Triangle chunk size: 8
+[     5.68s |    0.09m] Pixel tile height: 64
+[     5.68s |    0.09m] Triangle window function: ON
+[     5.69s |    0.09m] Random initial orientation: ON
+[     5.69s |    0.09m] Pseudo depth sorting: ON, fixed back-to-front depth
+[     5.69s |    0.09m] Densify: ON | Prune: ON
+[     5.69s |    0.09m] D-SSIM schedule: start=800, ramp=800, final_weight=0.05
+[     5.69s |    0.09m] Render save schedule: every step until 50, every 5 steps until 150, then every 25 steps
+[    38.90s |    0.65m] Step     1 | loss=0.386607 | l1=0.386500 | dssim=0.000000 | ssim=0.000000 | ssim_w=0.000 | op=0.105600 | size=0.004598 | sigma_reg=0.000000 | sigma_mean=1.1599 | sigma_min=1.1599 | sigma_max=1.1601 | depth[min/mean/max]=(0.001/0.491/0.999) | N=608 | step_time=25.917s
+[   960.90s |   16.01m] Step    25 | loss=0.177815 | l1=0.177726 | dssim=0.000000 | ssim=0.000000 | ssim_w=0.000 | op=0.087124 | size=0.016993 | sigma_reg=0.000013 | sigma_mean=1.1564 | sigma_min=1.1561 | sigma_max=1.1634 | depth[min/mean/max]=(0.001/0.491/0.999) | N=608 | step_time=26.368s
+[  1614.85s |   26.91m] Step    50 | loss=0.095719 | l1=0.095642 | dssim=0.000000 | ssim=0.000000 | ssim_w=0.000 | op=0.074740 | size=0.028535 | sigma_reg=0.000042 | sigma_mean=1.1537 | sigma_min=1.1521 | sigma_max=1.1657 | depth[min/mean/max]=(0.001/0.491/0.999) | N=608 | step_time=20.958s
+[  2236.31s |   37.27m] Step    75 | loss=0.072213 | l1=0.072142 | dssim=0.000000 | ssim=0.000000 | ssim_w=0.000 | op=0.067192 | size=0.035569 | sigma_reg=0.000073 | sigma_mean=1.1518 | sigma_min=1.1477 | sigma_max=1.1638 | depth[min/mean/max]=(0.001/0.491/0.999) | N=608 | step_time=15.265s

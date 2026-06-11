@@ -1,0 +1,10 @@
+conda activate conda_tri_env
+
+# 1. Activate your env
+conda activate conda_tri_env
+
+# 2. Uninstall the current CPU version
+pip uninstall torch torchvision torchaudio -y
+
+# 3. Install the CUDA-enabled version (using CUDA 12.1 as a safe modern standard)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
